@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>简易地铁查询小程序</title>
+<style>
+  /* ===================== 基础样式 ===================== */
+  :root {
+    --bg: #f4f6fb;
+    --card: #ffffff;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --ok: #16a34a;
+    --err: #dc2626;
+    --warn: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
+  header h1 { margin: 0 0 4px; font-size: 26px; }
+  header p { margin: 0 0 20px; color: var(--muted); }
+
+  /* 选项卡 */
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tab-btn {
+    border: 1px solid var(--border); background: var(--card);
+    padding: 9px 18px; border-radius: 10px; cursor: pointer;
+    font-size: 15px; color: var(--muted); transition: .15s;
+  }
+  .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .card h2 { margin: 0 0 14px; font-size: 18px; }
+
+  /* 表单 */
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+  label { font-size: 13px; color: var(--muted); }
+  input, select {
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px;
+    font-size: 15px; background: #fff; color: var(--text); width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--primary); }
+  button.go {
+    background: var(--primary); color: #fff; border: none; border-radius: 9px;
+    padding: 11px 22px; font-size: 15px; cursor: pointer; font-weight: 600; white-space: nowrap;
+  }
+  button.go:hover { background: var(--primary-dark); }
+  button.ghost {
+    background: #fff; color: var(--primary); border: 1px solid var(--primary);
+    border-radius: 9px; padding: 9px 16px; font-size: 14px; cursor: pointer;
+  }
+  .radio-group { display: flex; gap: 16px; align-items: center; }
+  .radio-group label { display: flex; gap: 6px; align-items: center; color: var(--text); font-size: 15px; cursor: pointer; }
+
+  /* 结果与提示 */
+  .msg { padding: 12px 14px; border-radius: 9px; margin-top: 14px; font-size: 14px; }
+  .msg.err { background: #fef2f2; color: var(--err); border: 1px solid #fecaca; }
+  .msg.warn { background: #fffbeb; color: var(--warn); border: 1px solid #fde68a; }
+
+  .result { margin-top: 16px; }
+  .summary { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat {
+    background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; min-width: 100px; text-align: center; flex: 1;
+  }
+  .stat .num { font-size: 22px; font-weight: 700; color: var(--primary); }
+  .stat .lbl { font-size: 12px; color: var(--muted); }
+
+  /* 线路色块 */
+  .line-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+    border-radius: 20px; color: #fff; font-size: 13px; font-weight: 600; margin: 2px;
+  }
+
+  /* 路径时间轴 */
+  .timeline { list-style: none; padding: 0; margin: 8px 0 0; }
+  .timeline li { position: relative; padding: 4px 0 14px 26px; }
+  .timeline li::before {
+    content: ""; position: absolute; left: 5px; top: 9px;
+    width: 10px; height: 10px; border-radius: 50%; background: var(--primary); z-index: 1;
+  }
+  .timeline li::after {
+    content: ""; position: absolute; left: 9.5px; top: 9px; bottom: -5px;
+    width: 2px; background: var(--border);
+  }
+  .timeline li:last-child::after { display: none; }
+  .timeline .seg-head { font-weight: 600; margin-bottom: 2px; }
+  .timeline .transfer { color: var(--warn); font-weight: 600; }
+  .station-list { color: var(--muted); font-size: 13px; }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { color: var(--muted); font-weight: 600; background: #f8fafc; }
+  td .path-mini { color: var(--muted); font-size: 12px; }
+  tr:hover td { background: #f8fafc; }
+
+  /* 线网总览 */
+  .network-line { margin-bottom: 10px; }
+  .network-line .stops { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  details summary { cursor: pointer; color: var(--primary); font-size: 14px; }
+  .test-out { font-family: ui-monospace, Menlo, monospace; font-size: 13px; white-space: pre-wrap; margin-top: 10px; }
+
+  /* 数据源标识 */
+  .src-badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; vertical-align: middle; }
+  .src-badge.green { background: #dcfce7; color: var(--ok); }
+  .src-badge.gray  { background: #f1f5f9; color: var(--muted); }
+  .src-badge.amber { background: #fffbeb; color: var(--warn); }
+  .extra-stats { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  .extra-stats b { color: var(--text); }
+  /* 地图 */
+  #mapContainer .amap-info-content { font-size: 13px; }
+  .legend-chip { display: inline-flex; align-items: center; gap: 5px; margin: 2px 8px 2px 0; font-size: 12px; color: var(--muted); }
+  .legend-chip i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+  .pass { color: var(--ok); } .fail { color: var(--err); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🚇 北京地铁查询小程序</h1>
+    <p>路线查询 · 附近站点筛选 · 换乘计算（线网数据来自高德地图）
+       <span id="amapStatus" class="src-badge gray">高德实时：连接中…</span></p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="route">🧭 路线查询</button>
+    <button class="tab-btn" data-tab="nearby">📍 附近站点</button>
+    <button class="tab-btn" data-tab="network">🗺️ 线网总览</button>
+    <button class="tab-btn" data-tab="map">🛰️ 实时地图</button>
+  </div>
+
+  <!-- ============ 1. 路线查询 ============ -->
+  <section id="tab-route" class="tab-panel card">
+    <h2>路线查询</h2>
+    <div class="row">
+      <div class="field">
+        <label for="startInput">起始站点</label>
+        <input id="startInput" list="stationOptions" placeholder="如：西直门" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="endInput">终点站点</label>
+        <input id="endInput" list="stationOptions" placeholder="如：国贸" autocomplete="off">
+      </div>
+      <button class="go" id="routeBtn">查询路线</button>
+    </div>
+    <div id="routeMsg"></div>
+    <div id="routeResult" class="result"></div>
+  </section>
+
+  <!-- ============ 2. 附近站点 ============ -->
+  <section id="tab-nearby" class="tab-panel card" style="display:none">
+    <h2>附近站点筛选</h2>
+    <div class="row">
+      <div class="field">
+        <label for="nearbyStation">以该站点为中心</label>
+        <input id="nearbyStation" list="stationOptions" placeholder="如：西直门" autocomplete="off">
+      </div>
+      <div class="field" style="flex:0 0 auto">
+        <label>筛选方式</label>
+        <div class="radio-group" style="padding-top:6px">
+          <label><input type="radio" name="mode" value="time" checked> 时间内</label>
+          <label><input type="radio" name="mode" value="stops"> 站数内</label>
+        </div>
+      </div>
+      <div class="field" style="flex:0 0 130px">
+        <label id="thLabel">阈值（分钟）</label>
+        <input id="threshold" type="number" min="1" value="30">
+      </div>
+      <button class="go" id="nearbyBtn">查询</button>
+    </div>
+    <div id="nearbyMsg"></div>
+    <div id="nearbyResult" class="result"></div>
+  </section>
+
+  <!-- ============ 3. 线网总览 + 自检 ============ -->
+  <section id="tab-network" class="tab-panel card" style="display:none">
+    <h2>线网总览</h2>
+    <div id="networkView"></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
+    <button class="ghost" id="testBtn">▶ 运行测试用例（自检）</button>
+    <div id="testOut" class="test-out"></div>
+  </section>
+
+  <!-- ============ 4. 实时地图 ============ -->
+  <section id="tab-map" class="tab-panel card" style="display:none">
+    <h2>实时地图 <span style="font-size:13px;color:var(--muted);font-weight:400">（高德底图 · 全线网 · 查询后高亮路线）</span></h2>
+    <div id="mapContainer" style="width:100%;height:540px;border-radius:10px;overflow:hidden;background:#eef2f7"></div>
+    <div id="mapLegend" style="margin-top:10px"></div>
+  </section>
+
+  <datalist id="stationOptions"></datalist>
+</div>
+
+<!-- 高德 Key 配置（与代码分离，便于单独保管） -->
+<script src="amap_config.js"></script>
+<!-- 北京地铁线网数据（高德地图）。用 <script src> 加载，本地双击打开也不受跨域限制 -->
+<script src="beijing_subway.js"></script>
+<script>
+"use strict";
+/* =========================================================================
+   一、地铁数据结构（示例城市）
+   -------------------------------------------------------------------------
+   设计说明：
+   - lines：以"线路"为单位存储，每条线路包含 名称、颜色、有序站点数组 stations，
+     以及可选的 times 数组（相邻站点间的实际耗时，长度 = stations.length - 1）。
+   - 若某条线路没有提供 times，则自动按"默认每站 DEFAULT_SEG 分钟"补齐。
+   - 换乘站无需手动声明：凡是出现在 ≥2 条线路上的站点，自动识别为换乘站。
+   - 这样设计便于扩展：新增城市/线路只需往 lines 里加数据即可。
+   ========================================================================= */
+const DEFAULT_SEG = 2;       // 默认站间耗时（分钟）—— 无详细数据时使用
+const TRANSFER_TIME = 5;     // 换乘默认增加时间（分钟）
+
+/* 路网数据来自高德地图（北京全部地铁线路），由 fetch_beijing_subway.py 生成 beijing_subway.js，
+   通过 <script src="beijing_subway.js"> 在本文件 head 之前加载，挂在 window.SUBWAY_DATA 上。
+   数据结构与本程序完全一致：lines[key] = { name, color, stations[], times[], coords[] }。
+   - times：由"站间地理距离 ÷ 平均速度"估算（高德接口不提供运行时间）；
+   - 若将来某条线没有 times，会自动回退到"默认每站 2 分钟"。
+   想换城市/刷新数据：重新运行 fetch_beijing_subway.py 即可，无需改动本文件。 */
+const FALLBACK_CITY = {            // 当 beijing_subway.js 缺失时的最小兜底示例
+  name: "示例城市（未加载北京数据）",
+  lines: {
+    line1: { name: "1号线", color: "#e3002b",
+             stations: ["A站", "B站", "C站"], times: [2, 3] }
+  }
+};
+const CITY = window.SUBWAY_DATA || FALLBACK_CITY;
+
+/* =========================================================================
+   二、构图：把线网编译成"状态图"
+   -------------------------------------------------------------------------
+   核心思路（如何正确表达换乘代价）：
+   - 节点不是单纯的"站点"，而是"站点@线路"的组合状态，例如 "人民广场@line1"。
+   - 两类边：
+       1) 乘车边 ride：同一条线路相邻两站之间，权重 = 实际站间耗时；
+       2) 换乘边 transfer：同一站点不同线路之间，权重 = TRANSFER_TIME，
+          并且标记 isTransfer=true（用于统计换乘次数）。
+   - 这样在 Dijkstra 中，换乘自然会增加 5 分钟时间，且换乘次数可被精确计数。
+   ========================================================================= */
+const Graph = (() => {
+  const adj = new Map();            // nodeId -> [{to, weight, isTransfer, line}]
+  const stationLines = new Map();   // 站点名 -> Set(经过的线路key)
+  const allStations = new Set();
+
+  const nodeId = (station, line) => station + "@@" + line;
+  const stationOf = id => id.split("@@")[0];
+  const lineOf = id => id.split("@@")[1];
+  const addEdge = (a, b, w, isTransfer, line) => {
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a).push({ to: b, weight: w, isTransfer, line });
+  };
+
+  // 1) 统计每个站点经过哪些线路
+  for (const [key, line] of Object.entries(CITY.lines)) {
+    line.stations.forEach(s => {
+      allStations.add(s);
+      if (!stationLines.has(s)) stationLines.set(s, new Set());
+      stationLines.get(s).add(key);
+    });
+  }
+
+  // 2) 乘车边（同线相邻站，双向）
+  for (const [key, line] of Object.entries(CITY.lines)) {
+    const st = line.stations;
+    for (let i = 0; i < st.length - 1; i++) {
+      // 有 times 用实际耗时，否则默认每站 DEFAULT_SEG 分钟
+      const w = (line.times && line.times[i] != null) ? line.times[i] : DEFAULT_SEG;
+      const a = nodeId(st[i], key), b = nodeId(st[i + 1], key);
+      addEdge(a, b, w, false, key);
+      addEdge(b, a, w, false, key);
+    }
+  }
+
+  // 3) 换乘边（同站不同线，两两双向）
+  for (const [station, lineSet] of stationLines.entries()) {
+    const ls = [...lineSet];
+    if (ls.length < 2) continue;     // 非换乘站跳过
+    for (let i = 0; i < ls.length; i++) {
+      for (let j = i + 1; j < ls.length; j++) {
+        const a = nodeId(station, ls[i]), b = nodeId(station, ls[j]);
+        addEdge(a, b, TRANSFER_TIME, true, null);
+        addEdge(b, a, TRANSFER_TIME, true, null);
+      }
+    }
+  }
+
+  return { adj, stationLines, allStations, nodeId, stationOf, lineOf };
+})();
+
+const lineName  = key => CITY.lines[key].name;
+const lineColor = key => CITY.lines[key].color;
+
+/* =========================================================================
+   三、核心算法：Dijkstra（带换乘次数次级排序）
+   -------------------------------------------------------------------------
+   - 比较规则：优先比较总时间 time；时间相同时比较换乘次数 transfers（越少越好）。
+   - 起点处理：从"起点@每一条经过该站的线路"出发，初始 time=0、transfers=0
+     （首次上车不算换乘）。
+   - 返回 dist（每个状态节点的最优 {time, transfers}）与 prev（前驱，用于回溯路径）。
+   - 由于线网规模小，这里用 O(V²) 的朴素实现，逻辑更直观。
+   ========================================================================= */
+function dijkstra(startStation) {
+  const dist = new Map();   // nodeId -> {time, transfers}
+  const prev = new Map();   // nodeId -> 前驱 nodeId
+  const visited = new Set();
+
+  // 比较 (time, transfers) 的字典序：a 是否优于 b
+  const better = (a, b) =>
+    a.time < b.time || (a.time === b.time && a.transfers < b.transfers);
+
+  // 初始化：起点所在每条线路都是一个可能的出发状态
+  const startLines = Graph.stationLines.get(startStation);
+  for (const lk of startLines) {
+    const id = Graph.nodeId(startStation, lk);
+    dist.set(id, { time: 0, transfers: 0 });
+    prev.set(id, null);
+  }
+
+  while (true) {
+    // 取出未访问中 (time, transfers) 最小的节点
+    let u = null, uDist = null;
+    for (const [id, d] of dist.entries()) {
+      if (visited.has(id)) continue;
+      if (uDist === null || better(d, uDist)) { u = id; uDist = d; }
+    }
+    if (u === null) break;         // 全部处理完
+    visited.add(u);
+
+    // 松弛邻边
+    for (const e of (Graph.adj.get(u) || [])) {
+      if (visited.has(e.to)) continue;
+      const nd = {
+        time: uDist.time + e.weight,
+        transfers: uDist.transfers + (e.isTransfer ? 1 : 0)
+      };
+      const old = dist.get(e.to);
+      if (!old || better(nd, old)) { dist.set(e.to, nd); prev.set(e.to, u); }
+    }
+  }
+  return { dist, prev };
+}
+
+// 回溯：从某个终点状态节点沿 prev 还原出完整状态节点序列
+function reconstruct(prev, endNode) {
+  const path = [];
+  let cur = endNode;
+  while (cur !== undefined && cur !== null) {
+    path.unshift(cur);
+    cur = prev.get(cur);
+  }
+  return path;
+}
+
+/* 把"状态节点序列"翻译为人类可读的路线结构：
+   { time, stops, transfers, segments[], lines[], transferStations[], stationPath[] } */
+function nodesToRoute(nodes, time) {
+  const segments = [];   // 每段：{ line, stations:[...] }
+  let cur = { line: Graph.lineOf(nodes[0]), stations: [Graph.stationOf(nodes[0])] };
+
+  for (let i = 1; i < nodes.length; i++) {
+    const prevS = Graph.stationOf(nodes[i - 1]);
+    const curS = Graph.stationOf(nodes[i]);
+    if (prevS === curS) {
+      // 同站换线 = 换乘：结束当前段，开启新段
+      segments.push(cur);
+      cur = { line: Graph.lineOf(nodes[i]), stations: [curS] };
+    } else {
+      // 乘车：站点加入当前段
+      cur.stations.push(curS);
+    }
+  }
+  segments.push(cur);
+
+  const stops = segments.reduce((sum, s) => sum + (s.stations.length - 1), 0);
+  const transfers = segments.length - 1;
+  const lines = segments.map(s => s.line);
+  const transferStations = segments.slice(1).map(s => s.stations[0]);
+
+  // 途经站点列表（合并换乘站重复项）
+  const stationPath = [];
+  segments.forEach((s, idx) => {
+    s.stations.forEach((st, j) => {
+      if (idx > 0 && j === 0) return; // 换乘站已在上一段末尾
+      stationPath.push(st);
+    });
+  });
+
+  return { time, stops, transfers, segments, lines, transferStations, stationPath };
+}
+
+/* 对外接口 1：查询两站之间的推荐路线
+   返回 { ok, reason?, route? } */
+function findRoute(start, end) {
+  if (!Graph.allStations.has(start)) return { ok: false, reason: `起始站点「${start}」不存在` };
+  if (!Graph.allStations.has(end))   return { ok: false, reason: `终点站点「${end}」不存在` };
+  if (start === end)                 return { ok: false, reason: "起点与终点相同，无需查询" };
+
+  const { dist, prev } = dijkstra(start);
+
+  // 在"终点@各线路"中挑选最优状态
+  let bestNode = null, bestDist = null;
+  const better = (a, b) => a.time < b.time || (a.time === b.time && a.transfers < b.transfers);
+  for (const lk of Graph.stationLines.get(end)) {
+    const id = Graph.nodeId(end, lk);
+    const d = dist.get(id);
+    if (d && (bestDist === null || better(d, bestDist))) { bestNode = id; bestDist = d; }
+  }
+  if (!bestNode) return { ok: false, reason: "两站之间无法到达（线网不连通）" };
+
+  const nodes = reconstruct(prev, bestNode);
+  return { ok: true, route: nodesToRoute(nodes, bestDist.time) };
+}
+
+/* 对外接口 2：以某站为中心，求所有可达站点的最优路线（供"附近站点"筛选） */
+function reachableFrom(start) {
+  const { dist, prev } = dijkstra(start);
+  const better = (a, b) => a.time < b.time || (a.time === b.time && a.transfers < b.transfers);
+  const results = [];
+
+  for (const station of Graph.allStations) {
+    if (station === start) continue;
+    let bestNode = null, bestDist = null;
+    for (const lk of Graph.stationLines.get(station)) {
+      const id = Graph.nodeId(station, lk);
+      const d = dist.get(id);
+      if (d && (bestDist === null || better(d, bestDist))) { bestNode = id; bestDist = d; }
+    }
+    if (!bestNode) continue;
+    const route = nodesToRoute(reconstruct(prev, bestNode), bestDist.time);
+    results.push({ station, route });
+  }
+  return results;
+}
+
+/* =========================================================================
+   四、界面渲染
+   ========================================================================= */
+const $ = sel => document.querySelector(sel);
+
+// 线路色块
+function lineChip(lineKey) {
+  return `<span class="line-chip" style="background:${lineColor(lineKey)}">${lineName(lineKey)}</span>`;
+}
+
+// 渲染一条路线的详情
+function renderRoute(route) {
+  const linesHtml = route.lines.map(lineChip).join(" → ");
+  const transferTxt = route.transfers === 0
+    ? "无需换乘（直达）"
+    : `${route.transfers} 次 · 换乘站：${route.transferStations.join("、")}`;
+
+  let timeline = '<ul class="timeline">';
+  route.segments.forEach((seg, i) => {
+    const from = seg.stations[0], to = seg.stations[seg.stations.length - 1];
+    if (i > 0) {
+      timeline += `<li><span class="transfer">🔄 在「${from}」换乘 ${lineName(seg.line)}</span></li>`;
+    }
+    timeline += `<li>
+        <div class="seg-head">${lineChip(seg.line)} ${from} → ${to}（${seg.stations.length - 1} 站）</div>
+        <div class="station-list">${seg.stations.join(" · ")}</div>
+      </li>`;
+  });
+  timeline += "</ul>";
+
+  return `
+    <div class="summary">
+      <div class="stat"><div class="num">${route.time}</div><div class="lbl">总时间(分钟)</div></div>
+      <div class="stat"><div class="num">${route.stops}</div><div class="lbl">总站数</div></div>
+      <div class="stat"><div class="num">${route.transfers}</div><div class="lbl">换乘次数</div></div>
+      <div class="stat"><div class="num">${route.lines.length}</div><div class="lbl">经过线路</div></div>
+    </div>
+    <div style="margin-bottom:8px"><b>经过线路：</b> ${linesHtml}</div>
+    <div style="margin-bottom:8px"><b>换乘：</b> ${transferTxt}</div>
+    <div style="margin-bottom:8px"><b>推荐路线：</b></div>
+    ${timeline}
+    <div style="margin-top:10px"><b>途经站点列表（共 ${route.stationPath.length} 站）：</b>
+      <div class="station-list">${route.stationPath.join(" → ")}</div>
+    </div>`;
+}
+
+/* =========================================================================
+   四之二、高德实时路径规划（Web端 JS API）
+   -------------------------------------------------------------------------
+   - 加载 AMap JS API（含 AMap.Transfer 公交/地铁换乘插件）。
+   - 用站点真实经纬度调用官方路径规划，得到真实时长、换乘、步行距离、票价。
+   - 任何失败（未配置 key / 加载失败 / 超配额 / 无方案）都会自动回退到离线 Dijkstra。
+   ========================================================================= */
+let AMAP_READY = false;
+
+// 站点名 -> [lng,lat] 索引（取自高德线网数据，供路径规划用）
+const STATION_COORD = (() => {
+  const m = new Map();
+  for (const line of Object.values(CITY.lines)) {
+    (line.stations || []).forEach((name, i) => {
+      const c = line.coords && line.coords[i];
+      if (c && !m.has(name)) m.set(name, c);  // [lng,lat]
+    });
+  }
+  return m;
+})();
+
+// 数据源标识
+const SRC_BADGE = {
+  amap:    '<div style="margin-bottom:10px"><span class="src-badge green">数据源：高德实时路径规划</span></div>',
+  fallback:'<div style="margin-bottom:10px"><span class="src-badge amber">数据源：离线估算（高德实时不可用，已自动回退）</span></div>',
+  offline: '<div style="margin-bottom:10px"><span class="src-badge gray">数据源：离线估算（每站约2分钟·换乘5分钟）</span></div>'
+};
+
+// 异步加载 AMap JS API，更新右上角连接状态
+function initAMap() {
+  const badge = $("#amapStatus");
+  if (!window.AMAP_CONFIG || !AMAP_CONFIG.key) {
+    badge.className = "src-badge gray"; badge.textContent = "高德实时：未配置（用离线估算）"; return;
+  }
+  // 安全密钥必须在加载 JS API 之前设置
+  window._AMapSecurityConfig = { securityJsCode: AMAP_CONFIG.securityJsCode };
+  const s = document.createElement("script");
+  s.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_CONFIG.key}&plugin=AMap.Transfer,AMap.ToolBar,AMap.Scale`;
+  s.onload = () => {
+    if (typeof AMap !== "undefined") {
+      AMAP_READY = true;
+      badge.className = "src-badge green"; badge.textContent = "高德实时：已连接";
+      // 若用户已停留在地图页，加载完成后立即初始化地图
+      const active = document.querySelector(".tab-btn.active");
+      if (active && active.dataset.tab === "map") ensureMap();
+    } else {
+      badge.className = "src-badge amber"; badge.textContent = "高德实时：加载异常（用离线估算）";
+    }
+  };
+  s.onerror = () => { badge.className = "src-badge amber"; badge.textContent = "高德实时：加载失败（用离线估算）"; };
+  document.head.appendChild(s);
+}
+
+// 调用 AMap.Transfer 进行地铁换乘规划，返回 Promise<最优方案 plan>
+function amapTransitSearch(originLngLat, destLngLat) {
+  return new Promise((resolve, reject) => {
+    AMap.plugin("AMap.Transfer", () => {
+      const transfer = new AMap.Transfer({
+        city: (AMAP_CONFIG && AMAP_CONFIG.city) || "北京",
+        policy: AMap.TransferPolicy.LEAST_TIME,   // 最短时间优先（与本程序规则一致）
+        nightflag: false
+      });
+      transfer.search(originLngLat, destLngLat, (status, result) => {
+        if (status === "complete" && result && result.plans && result.plans.length) {
+          resolve(result.plans[0]);
+        } else {
+          reject(new Error((result && result.info) || status || "no_plan"));
+        }
+      });
+    });
+  });
+}
+
+// 把高德方案解析成统一结构（防御式解析，字段缺失也不报错）
+function parseAmapPlan(plan) {
+  const transitSegs = [];
+  (plan.segments || []).forEach(seg => {
+    const tr = seg.transit;
+    if (tr && tr.lines && tr.lines.length) {
+      const viaStops = (tr.via_stops || []).map(s => s.name);
+      transitSegs.push({
+        lineName: tr.lines[0].name,
+        from: tr.on_station && tr.on_station.name,
+        to: tr.off_station && tr.off_station.name,
+        viaStops
+      });
+    }
+  });
+  return {
+    minutes: Math.round((plan.time || 0) / 60),
+    fare: (plan.cost != null) ? plan.cost : (plan.fee != null ? plan.fee : null),
+    walkMeters: Math.round(plan.walking_distance || 0),
+    transitSegs,
+    transfers: Math.max(0, transitSegs.length - 1),
+    stops: transitSegs.reduce((s, x) => s + (x.viaStops.length + 1), 0)
+  };
+}
+
+// 按线路名匹配本地颜色（高德只给线路名，不给颜色）
+function colorByLineName(name) {
+  for (const ln of Object.values(CITY.lines)) if (ln.name === name) return ln.color;
+  for (const ln of Object.values(CITY.lines))
+    if (name && (name.includes(ln.name) || ln.name.includes(name))) return ln.color;
+  return "#888";
+}
+const chipByName = name =>
+  `<span class="line-chip" style="background:${colorByLineName(name)}">${name || "线路"}</span>`;
+
+// 渲染高德实时方案
+function renderAmapPlan(p) {
+  if (!p.transitSegs.length) return `<div class="msg warn">高德未返回地铁方案，请改用离线估算或换站点。</div>`;
+  const linesHtml = p.transitSegs.map(s => chipByName(s.lineName)).join(" → ");
+  const transferTxt = p.transfers === 0
+    ? "无需换乘（直达）"
+    : `${p.transfers} 次 · 换乘站：${p.transitSegs.slice(1).map(s => s.from).join("、")}`;
+
+  let timeline = '<ul class="timeline">';
+  p.transitSegs.forEach((seg, i) => {
+    if (i > 0) timeline += `<li><span class="transfer">🔄 在「${seg.from}」换乘 ${seg.lineName}</span></li>`;
+    const stations = [seg.from, ...seg.viaStops, seg.to].filter(Boolean);
+    timeline += `<li>
+        <div class="seg-head">${chipByName(seg.lineName)} ${seg.from} → ${seg.to}（${stations.length - 1} 站）</div>
+        <div class="station-list">${stations.join(" · ")}</div>
+      </li>`;
+  });
+  timeline += "</ul>";
+
+  const fullPath = p.transitSegs.flatMap((seg, i) => {
+    const st = [seg.from, ...seg.viaStops, seg.to].filter(Boolean);
+    return i > 0 ? st.slice(1) : st;
+  });
+  const extra = `<div class="extra-stats">
+      <span>步行约 <b>${p.walkMeters}</b> 米</span>
+      ${p.fare != null ? `<span>参考票价 <b>${p.fare}</b> 元</span>` : ""}
+    </div>`;
+
+  return `
+    <div class="summary">
+      <div class="stat"><div class="num">${p.minutes}</div><div class="lbl">总时间(分钟)</div></div>
+      <div class="stat"><div class="num">${p.stops}</div><div class="lbl">总站数</div></div>
+      <div class="stat"><div class="num">${p.transfers}</div><div class="lbl">换乘次数</div></div>
+      <div class="stat"><div class="num">${p.transitSegs.length}</div><div class="lbl">经过线路</div></div>
+    </div>
+    ${extra}
+    <div style="margin-bottom:8px"><b>经过线路：</b> ${linesHtml}</div>
+    <div style="margin-bottom:8px"><b>换乘：</b> ${transferTxt}</div>
+    <div style="margin-bottom:8px"><b>推荐路线：</b></div>
+    ${timeline}
+    <div style="margin-top:10px"><b>途经站点列表（共 ${fullPath.length} 站）：</b>
+      <div class="station-list">${fullPath.join(" → ")}</div>
+    </div>`;
+}
+
+/* =========================================================================
+   四之三、实时地图（AMap.Map）：绘制全线网 + 高亮规划路线
+   ========================================================================= */
+let AMAP_MAP = null, MAP_INITED = false;
+let routeOverlays = [];        // 当前高亮路线的覆盖物
+let lastRoutePath = null;      // 最近一次规划的坐标路径 [[lng,lat]...]
+let mapInfoWin = null;
+
+// 懒加载：切到地图页时才初始化（避免隐藏容器尺寸为 0）
+function ensureMap() {
+  const box = $("#mapContainer");
+  if (MAP_INITED) { if (AMAP_MAP) AMAP_MAP.resize(); return; }
+  if (!AMAP_READY) { box.innerHTML = `<div class="msg warn" style="margin:16px">高德地图尚未连接，请稍候，或检查 Key 的域名白名单是否含当前域名。</div>`; return; }
+  box.innerHTML = "";
+  AMAP_MAP = new AMap.Map(box, { zoom: 11, center: [116.397, 39.909], mapStyle: "amap://styles/light" });
+  AMAP_MAP.addControl(new AMap.ToolBar({ position: "RB" }));
+  AMAP_MAP.addControl(new AMap.Scale());
+  mapInfoWin = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -6) });
+  drawNetwork();
+  MAP_INITED = true;
+  if (lastRoutePath) highlightRoute(lastRoutePath);   // 若已查过路线，补绘高亮
+}
+
+// 绘制全部线路（折线）与站点（圆点，点击看详情）
+function drawNetwork() {
+  for (const line of Object.values(CITY.lines)) {
+    const path = (line.coords || []).filter(Boolean);
+    if (path.length < 2) continue;
+    new AMap.Polyline({
+      path, strokeColor: line.color, strokeWeight: 5, strokeOpacity: 0.85,
+      lineJoin: "round", lineCap: "round", map: AMAP_MAP
+    });
+  }
+  for (const [name, c] of STATION_COORD) {
+    const isTransfer = Graph.stationLines.get(name).size > 1;
+    const dot = new AMap.CircleMarker({
+      center: c, radius: isTransfer ? 4.5 : 3,
+      fillColor: "#fff", fillOpacity: 1,
+      strokeColor: isTransfer ? "#111" : "#666", strokeWeight: isTransfer ? 2 : 1,
+      cursor: "pointer", map: AMAP_MAP, zIndex: 50
+    });
+    dot.on("click", () => {
+      const lns = [...Graph.stationLines.get(name)].map(lineName).join("、");
+      mapInfoWin.setContent(`<b>${name}</b><br>线路：${lns}${isTransfer ? "<br>🔄 换乘站" : ""}`);
+      mapInfoWin.open(AMAP_MAP, c);
+    });
+  }
+  // 图例
+  $("#mapLegend").innerHTML = Object.values(CITY.lines)
+    .map(l => `<span class="legend-chip"><i style="background:${l.color}"></i>${l.name}</span>`).join("");
+}
+
+// 站点名序列 -> 坐标序列
+function namesToCoords(names) {
+  return names.map(n => STATION_COORD.get(n)).filter(Boolean);
+}
+
+// 高亮一条规划路线（粗线 + 起终点标记 + 自动缩放）
+function highlightRoute(coords) {
+  if (!AMAP_MAP || !coords || coords.length < 2) return;
+  AMAP_MAP.remove(routeOverlays);
+  routeOverlays = [];
+  const line = new AMap.Polyline({
+    path: coords, strokeColor: "#111", strokeWeight: 7, strokeOpacity: 0.9,
+    showDir: true, lineJoin: "round", map: AMAP_MAP, zIndex: 100
+  });
+  const start = new AMap.Marker({ position: coords[0], map: AMAP_MAP, zIndex: 110, title: "起点" });
+  const end = new AMap.Marker({ position: coords[coords.length - 1], map: AMAP_MAP, zIndex: 110, title: "终点" });
+  routeOverlays = [line, start, end];
+  AMAP_MAP.setFitView(routeOverlays, false, [60, 60, 60, 60]);
+}
+
+// 记录并（若地图已就绪）高亮规划路线；切到地图页也能看到
+function setRouteForMap(coords) {
+  lastRoutePath = coords && coords.length >= 2 ? coords : null;
+  if (MAP_INITED && lastRoutePath) highlightRoute(lastRoutePath);
+}
+
+// 从高德方案/离线方案提取有序站点坐标
+function amapPlanPathCoords(p) {
+  const names = p.transitSegs.flatMap((seg, i) => {
+    const st = [seg.from, ...seg.viaStops, seg.to].filter(Boolean);
+    return i > 0 ? st.slice(1) : st;
+  });
+  return namesToCoords(names);
+}
+
+// —— 路线查询事件（优先高德实时，失败自动回退离线）
+async function doRouteQuery() {
+  const start = $("#startInput").value.trim();
+  const end = $("#endInput").value.trim();
+  const msg = $("#routeMsg"), out = $("#routeResult");
+  msg.innerHTML = ""; out.innerHTML = "";
+
+  // 统一的有效性校验（基于本地线网，确保有坐标可用）
+  if (!start || !end) { msg.innerHTML = `<div class="msg warn">请输入起始站点和终点站点</div>`; return; }
+  if (!Graph.allStations.has(start)) { msg.innerHTML = `<div class="msg err">⚠️ 起始站点「${start}」不存在</div>`; return; }
+  if (!Graph.allStations.has(end))   { msg.innerHTML = `<div class="msg err">⚠️ 终点站点「${end}」不存在</div>`; return; }
+  if (start === end)                 { msg.innerHTML = `<div class="msg err">⚠️ 起点与终点相同，无需查询</div>`; return; }
+
+  const oc = STATION_COORD.get(start), dc = STATION_COORD.get(end);
+
+  // 优先：高德实时路径规划
+  if (AMAP_READY && oc && dc) {
+    out.innerHTML = `<div class="msg">⏳ 正在向高德请求实时路线…</div>`;
+    try {
+      const plan = await amapTransitSearch(oc, dc);
+      const p = parseAmapPlan(plan);
+      out.innerHTML = SRC_BADGE.amap + renderAmapPlan(p);
+      setRouteForMap(amapPlanPathCoords(p));         // 同步到地图高亮
+      return;
+    } catch (e) {
+      // 失败：回退到离线，并提示原因
+      const r = findRoute(start, end);
+      out.innerHTML = SRC_BADGE.fallback + (r.ok ? renderRoute(r.route)
+        : `<div class="msg err">⚠️ ${r.reason}</div>`);
+      if (r.ok) setRouteForMap(namesToCoords(r.route.stationPath));
+      console.warn("高德路径规划失败，已回退离线：", e.message);
+      return;
+    }
+  }
+
+  // 兜底：离线 Dijkstra
+  const r = findRoute(start, end);
+  if (!r.ok) { msg.innerHTML = `<div class="msg err">⚠️ ${r.reason}</div>`; return; }
+  out.innerHTML = SRC_BADGE.offline + renderRoute(r.route);
+  setRouteForMap(namesToCoords(r.route.stationPath));
+}
+
+// —— 附近站点事件
+function doNearbyQuery() {
+  const center = $("#nearbyStation").value.trim();
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const th = parseFloat($("#threshold").value);
+  const msg = $("#nearbyMsg"), out = $("#nearbyResult");
+  msg.innerHTML = ""; out.innerHTML = "";
+
+  if (!center) { msg.innerHTML = `<div class="msg warn">请选择中心站点</div>`; return; }
+  if (!Graph.allStations.has(center)) { msg.innerHTML = `<div class="msg err">⚠️ 站点「${center}」不存在</div>`; return; }
+  if (isNaN(th) || th <= 0) { msg.innerHTML = `<div class="msg warn">请输入有效的阈值</div>`; return; }
+
+  let list = reachableFrom(center);
+  // 按筛选方式过滤
+  list = list.filter(item => mode === "time" ? item.route.time <= th : item.route.stops <= th);
+  // 排序：时间模式按时间，站数模式按站数
+  list.sort((a, b) => mode === "time"
+    ? a.route.time - b.route.time
+    : a.route.stops - b.route.stops || a.route.time - b.route.time);
+
+  if (list.length === 0) {
+    msg.innerHTML = `<div class="msg warn">在该条件下没有可到达的站点，试着放宽阈值。</div>`;
+    return;
+  }
+
+  const unit = mode === "time" ? `${th} 分钟内` : `${th} 站内`;
+  let html = `<div style="margin-bottom:6px">从 <b>${center}</b> 出发，${unit}可达 <b>${list.length}</b> 个站点：</div>`;
+  html += `<table><thead><tr>
+      <th>站点</th><th>所在线路</th><th>距离站数</th><th>预计到达</th><th>推荐路径</th>
+    </tr></thead><tbody>`;
+  list.forEach(item => {
+    const r = item.route;
+    const linesOfStation = [...Graph.stationLines.get(item.station)].map(lineChip).join(" ");
+    const pathTxt = r.lines.map(lineName).join(" → ")
+      + (r.transfers ? `（换 ${r.transfers} 次：${r.transferStations.join("、")}）` : "（直达）");
+    html += `<tr>
+        <td><b>${item.station}</b></td>
+        <td>${linesOfStation}</td>
+        <td>${r.stops} 站</td>
+        <td>约 ${r.time} 分钟</td>
+        <td><div class="path-mini">${pathTxt}</div></td>
+      </tr>`;
+  });
+  html += `</tbody></table>`;
+  out.innerHTML = html;
+}
+
+// —— 线网总览
+function renderNetwork() {
+  let html = `<p style="color:var(--muted);margin-top:0">${CITY.name}地铁 · 共 ${Object.keys(CITY.lines).length} 条线路、${Graph.allStations.size} 个站点</p>`;
+  for (const [key, line] of Object.entries(CITY.lines)) {
+    html += `<div class="network-line">
+        ${lineChip(key)}
+        <div class="stops">${line.stations.join(" — ")}</div>
+      </div>`;
+  }
+  // 列出换乘站
+  const transferStations = [...Graph.stationLines.entries()]
+    .filter(([, s]) => s.size >= 2)
+    .map(([st, s]) => `${st}（${[...s].map(lineName).join("/")}）`);
+  html += `<div style="margin-top:12px"><b>换乘站：</b> ${transferStations.join("，")}</div>`;
+  $("#networkView").innerHTML = html;
+}
+
+// —— 填充站点 datalist（输入框自动补全 + 减少无效输入）
+function fillStationOptions() {
+  const dl = $("#stationOptions");
+  dl.innerHTML = [...Graph.allStations].sort().map(s => `<option value="${s}">`).join("");
+}
+
+/* =========================================================================
+   五、测试用例（自检）
+   -------------------------------------------------------------------------
+   覆盖：直达最短优先、换乘场景、起终点相同、无效站点、附近站点筛选。
+   ========================================================================= */
+function runTests() {
+  const lines = [];
+  let pass = 0, fail = 0;
+  const assert = (name, cond, extra = "") => {
+    if (cond) { pass++; lines.push(`<span class="pass">✔ ${name}</span>`); }
+    else { fail++; lines.push(`<span class="fail">✗ ${name} ${extra}</span>`); }
+  };
+
+  // 用例1（数据驱动）：首条线相邻两站应直达——1 站、0 换乘、用时=该段实际耗时
+  const firstLine = CITY.lines[Object.keys(CITY.lines)[0]];
+  const s0 = firstLine.stations[0], s1 = firstLine.stations[1];
+  // 选一个枢纽站做基准（北京数据用"复兴门"；若换城市则回退到首条线首站）
+  const HUB = Graph.allStations.has("复兴门") ? "复兴门" : firstLine.stations[0];
+  const r1 = findRoute(s0, s1);
+  assert(`相邻站 ${s0}→${s1} 直达(1站/0换乘)`,
+    r1.ok && r1.route.transfers === 0 && r1.route.stops === 1 && r1.route.time <= firstLine.times[0],
+    r1.ok ? `实际 ${r1.route.time}min/${r1.route.stops}站/${r1.route.transfers}换乘` : "");
+
+  // 用例2：跨线站点必经换乘（西直门在2/4/13号线，国贸在1/10号线，无直达线路）
+  const r2 = findRoute("西直门", "国贸");
+  assert("西直门→国贸 可达", r2.ok);
+  assert("西直门→国贸 至少换乘 1 次", r2.ok && r2.route.transfers >= 1,
+    r2.ok ? `实际 ${r2.route.transfers} 次` : "");
+
+  // 用例3：路线对称——A→B 与 B→A 的总时间应相等（边权双向一致）
+  const ab = findRoute("西直门", "国贸"), ba = findRoute("国贸", "西直门");
+  assert("往返用时一致", ab.ok && ba.ok && ab.route.time === ba.route.time,
+    ab.ok && ba.ok ? `${ab.route.time} vs ${ba.route.time}` : "");
+
+  // 用例4：起终点相同 → 拦截
+  assert("起终点相同被拦截", !findRoute("西直门", "西直门").ok);
+
+  // 用例5：无效站点 → 拦截
+  assert("无效站点被拦截", !findRoute("西直门", "火星站").ok);
+
+  // 用例6：连通性——从枢纽出发应能到达其余所有站点
+  const cov = reachableFrom(HUB);
+  assert(`线网连通（从${HUB}可达全部站点）`, cov.length === Graph.allStations.size - 1,
+    `可达 ${cov.length}/${Graph.allStations.size - 1}`);
+
+  // 用例7：附近站点——30 分钟内的结果应全部满足时间约束
+  const nearT = cov.filter(x => x.route.time <= 30);
+  assert("30分钟内有可达站点且均满足约束",
+    nearT.length > 0 && nearT.every(x => x.route.time <= 30), `共 ${nearT.length} 个`);
+
+  // 用例8：附近站点——5 站内的结果应全部满足站数约束
+  const nearS = cov.filter(x => x.route.stops <= 5);
+  assert("5站内有可达站点且均满足约束",
+    nearS.length > 0 && nearS.every(x => x.route.stops <= 5), `共 ${nearS.length} 个`);
+
+  $("#testOut").innerHTML =
+    `<b>测试结果：${pass} 通过 / ${fail} 失败</b>\n` + lines.join("\n");
+}
+
+/* =========================================================================
+   六、事件绑定与初始化
+   ========================================================================= */
+// 选项卡切换
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".tab-panel").forEach(p => p.style.display = "none");
+    $("#tab-" + btn.dataset.tab).style.display = "block";
+    if (btn.dataset.tab === "map") ensureMap();   // 切到地图页时懒加载地图
+  });
+});
+
+// 筛选方式切换时，更新阈值标签与默认值
+document.querySelectorAll('input[name="mode"]').forEach(r => {
+  r.addEventListener("change", () => {
+    const isTime = document.querySelector('input[name="mode"]:checked').value === "time";
+    $("#thLabel").textContent = isTime ? "阈值（分钟）" : "阈值（站数）";
+    $("#threshold").value = isTime ? 30 : 5;
+  });
+});
+
+$("#routeBtn").addEventListener("click", doRouteQuery);
+$("#nearbyBtn").addEventListener("click", doNearbyQuery);
+$("#testBtn").addEventListener("click", runTests);
+// 回车快捷查询
+$("#startInput").addEventListener("keydown", e => { if (e.key === "Enter") doRouteQuery(); });
+$("#endInput").addEventListener("keydown", e => { if (e.key === "Enter") doRouteQuery(); });
+$("#nearbyStation").addEventListener("keydown", e => { if (e.key === "Enter") doNearbyQuery(); });
+
+// 初始化
+initAMap();          // 异步加载高德 JS API；失败/未配置都会自动回退离线
+fillStationOptions();
+renderNetwork();
+// 预填一组示例，打开即可看到效果
+$("#startInput").value = "西直门";
+$("#endInput").value = "国贸";
+$("#nearbyStation").value = "西直门";
+</script>
+</body>
+</html>
