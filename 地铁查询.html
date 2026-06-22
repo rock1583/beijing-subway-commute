@@ -182,6 +182,16 @@
         <label id="thLabel">阈值（分钟）</label>
         <input id="threshold" type="number" min="1" value="30">
       </div>
+      <div class="field" style="flex:0 0 130px">
+        <label for="maxTransfers">最多换乘</label>
+        <select id="maxTransfers">
+          <option value="">不限</option>
+          <option value="0">直达（0 次）</option>
+          <option value="1">≤ 1 次</option>
+          <option value="2">≤ 2 次</option>
+          <option value="3">≤ 3 次</option>
+        </select>
+      </div>
       <button class="go" id="nearbyBtn">查询</button>
     </div>
     <div id="nearbyMsg"></div>
@@ -780,6 +790,7 @@ function doNearbyQuery() {
   const center = $("#nearbyStation").value.trim();
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const th = parseFloat($("#threshold").value);
+  const maxTransfers = $("#maxTransfers").value;   // "" 表示不限换乘次数
   const msg = $("#nearbyMsg"), out = $("#nearbyResult");
   msg.innerHTML = ""; out.innerHTML = "";
 
@@ -790,24 +801,29 @@ function doNearbyQuery() {
   let list = reachableFrom(center);
   // 按筛选方式过滤
   list = list.filter(item => mode === "time" ? item.route.time <= th : item.route.stops <= th);
+  // 叠加：按换乘次数过滤（"" 表示不限）
+  if (maxTransfers !== "") list = list.filter(item => item.route.transfers <= Number(maxTransfers));
   // 排序：时间模式按时间，站数模式按站数
   list.sort((a, b) => mode === "time"
     ? a.route.time - b.route.time
     : a.route.stops - b.route.stops || a.route.time - b.route.time);
 
   if (list.length === 0) {
-    msg.innerHTML = `<div class="msg warn">在该条件下没有可到达的站点，试着放宽阈值。</div>`;
+    msg.innerHTML = `<div class="msg warn">在该条件下没有可到达的站点，试着放宽阈值或换乘限制。</div>`;
     return;
   }
 
   const unit = mode === "time" ? `${th} 分钟内` : `${th} 站内`;
-  let html = `<div style="margin-bottom:6px">从 <b>${center}</b> 出发，${unit}可达 <b>${list.length}</b> 个站点：</div>`;
+  const transferTxt = maxTransfers === "" ? ""
+    : maxTransfers === "0" ? "、且直达" : `、且最多换乘 ${maxTransfers} 次`;
+  let html = `<div style="margin-bottom:6px">从 <b>${center}</b> 出发，${unit}${transferTxt}可达 <b>${list.length}</b> 个站点：</div>`;
   html += `<table><thead><tr>
-      <th>站点</th><th>所在线路</th><th>距离站数</th><th>预计到达</th><th>推荐路径</th>
+      <th>站点</th><th>所在线路</th><th>距离站数</th><th>预计到达</th><th>换乘</th><th>推荐路径</th>
     </tr></thead><tbody>`;
   list.forEach(item => {
     const r = item.route;
     const linesOfStation = [...Graph.stationLines.get(item.station)].map(lineChip).join(" ");
+    const transferCell = r.transfers === 0 ? "直达" : `${r.transfers} 次`;
     const pathTxt = r.lines.map(lineName).join(" → ")
       + (r.transfers ? `（换 ${r.transfers} 次：${r.transferStations.join("、")}）` : "（直达）");
     html += `<tr>
@@ -815,6 +831,7 @@ function doNearbyQuery() {
         <td>${linesOfStation}</td>
         <td>${r.stops} 站</td>
         <td>约 ${r.time} 分钟</td>
+        <td>${transferCell}</td>
         <td><div class="path-mini">${pathTxt}</div></td>
       </tr>`;
   });
