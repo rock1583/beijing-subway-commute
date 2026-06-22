@@ -16,8 +16,3 @@
 | `beijing_subway.js` | 北京地铁线网数据（由脚本生成）|
 | `beijing_subway_raw.json` | 高德接口返回的原始数据 |
 | `fetch_beijing_subway.py` | 抓取并生成 `beijing_subway.js` 的脚本，运行 `python3 fetch_beijing_subway.py` 可刷新数据 |
-
-## 安全说明
-
-`amap_config.js` 中的高德 Web 端 Key 属于前端密钥，任何访问网页的人都能在浏览器里看到，这是高德 JS API 的固有特性，无法隐藏。
-正确的保护方式是在 [高德控制台](https://console.amap.com/) 为该 Key 设置 **域名白名单（Referer 白名单）**，只允许本站的 GitHub Pages 域名调用。
